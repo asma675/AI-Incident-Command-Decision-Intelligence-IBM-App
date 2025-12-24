@@ -8,7 +8,6 @@ async function request(path, opts = {}) {
     ...opts,
   });
 
-  // Try parse JSON even on errors so UI doesn't hard-crash
   const text = await res.text();
   let data;
   try {
@@ -44,9 +43,7 @@ function entityClient(entityName) {
 
   return {
     async list({ filter, sort } = {}) {
-      // Base44-ish query style:
-      // filter -> { status: "active" }
-      // sort -> "-created_date"
+      
       const query = buildQuery({
         ...(filter || {}),
         ...(sort ? { _sort: sort } : {}),
@@ -82,10 +79,8 @@ function entityClient(entityName) {
 }
 
 export const base44 = {
-  // Minimal auth shim so Layout.jsx doesn't break
   auth: {
     async me() {
-      // return null-ish user; Layout.jsx already handles not authenticated
       return { id: null, email: null };
     },
     async logout() {
