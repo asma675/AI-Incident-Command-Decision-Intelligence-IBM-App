@@ -1,7 +1,7 @@
 // src/pages/Layout.jsx
 import React, { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { api } from "@/api/client";
+import { api } from "@/api/client.js";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,12 +57,7 @@ export default function Layout() {
             <Badge variant="outline" className="truncate">
               {user?.email || "user@demo.local"}
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => api.auth.logout()}
-              title="Logout (demo)"
-            >
+            <Button variant="outline" size="sm" onClick={() => api.auth.logout()} title="Logout (demo)">
               Logout
             </Button>
           </div>
