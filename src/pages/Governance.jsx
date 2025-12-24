@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { base44 } from "@/api/Client";
+import { base44 } from "@/api/client";
 import { format } from "date-fns";
 import {
   Shield, CheckCircle2, XCircle, Edit3, 
