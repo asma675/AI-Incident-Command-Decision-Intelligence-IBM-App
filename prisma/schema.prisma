@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Incident {
+  id              String   @id @default(uuid())
+  title           String
+  description     String?
+  severity        String
+  status          String   @default("analyzing")
+  source          String?
+  logs            String?
+  affectedSystems Json?
+  tags            Json?
+  aiAnalysis       Json?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  decisions       Decision[]
+  reviews         PostIncidentReview[]
+  automations     IncidentAutomation[]
+  auditLogs       AuditLog[]
+}
+
+model Decision {
+  id                   String   @id @default(uuid())
+  incidentId           String
+  recommendationAction String
+  decision             String
+  decisionReason       String?
+  decidedBy            String?
+  decidedAt            DateTime?
+  createdAt            DateTime @default(now())
+
+  incident             Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+model PredictiveAlert {
+  id                  String   @id @default(uuid())
+  predictedIssue      String
+  description         String?
+  severity            String
+  likelihood          Float
+  confidenceScore     Float?
+  predictedTimeframe  String?
+  affectedSystems     Json?
+  contributingFactors Json?
+  preventativeActions Json?
+  status              String   @default("active")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model KnowledgeBaseArticle {
+  id             String   @id @default(uuid())
+  title          String
+  summary        String?
+  content        String
+  category       String   @default("general")
+  status         String   @default("draft")
+  author         String?
+  tags           Json?
+  relatedSystems Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model PostIncidentReview {
+  id               String   @id @default(uuid())
+  incidentId        String
+  executiveSummary  String
+  rootCauseAnalysis String?
+  timeline          Json?
+  impactAssessment  String?
+  keyLearnings      Json?
+  followUpActions   Json?
+  confidenceScore   Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  incident          Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+model IncidentAutomation {
+  id             String   @id @default(uuid())
+  incidentId      String
+  automationType  String
+  status          String   @default("queued")
+  executedAt      DateTime?
+  result          Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  incident        Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  incidentId String?
+  actionType String
+  actor      String?
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId])
+}
