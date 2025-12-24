@@ -1,10 +1,8 @@
+// src/api/client.js
 
 async function request(path, opts = {}) {
   const res = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(opts.headers || {}),
-    },
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     ...opts,
   });
 
@@ -18,11 +16,9 @@ async function request(path, opts = {}) {
 
   if (!res.ok) {
     const msg =
-      (data && (data.error || data.message)) ||
-      `Request failed (${res.status})`;
+      (data && (data.error || data.message)) || `Request failed (${res.status})`;
     throw new Error(msg);
   }
-
   return data;
 }
 
@@ -37,13 +33,10 @@ function buildQuery(params = {}) {
 }
 
 function entityClient(entityName) {
-  // Your server handler routes are like:
-  // /api/Incident, /api/Incident/<id>
   const base = `/api/${entityName}`;
 
   return {
     async list({ filter, sort } = {}) {
-      
       const query = buildQuery({
         ...(filter || {}),
         ...(sort ? { _sort: sort } : {}),
@@ -87,7 +80,6 @@ export const base44 = {
       return { ok: true };
     },
   },
-
   entities: {
     Incident: entityClient("Incident"),
     Decision: entityClient("Decision"),
