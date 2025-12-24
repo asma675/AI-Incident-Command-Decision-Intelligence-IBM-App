@@ -1,141 +1,137 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
-import { base44 } from "@/api/base44Client";
-import { ArrowLeft, AlertTriangle } from "lucide-react";
+// src/pages/CreateIncident.jsx
+import React, { useState } from "react";
+import { api } from "@/api/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
-import CreateIncidentForm from "@/components/forms/CreateIncidentForm";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 
 export default function CreateIncident() {
-  const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const handleSubmit = async (formData) => {
-    setIsSubmitting(true);
-    
-    const incident = await base44.entities.Incident.create({
-      ...formData,
-      status: "analyzing"
-    });
-    
-    // Create audit log
-    await base44.entities.AuditLog.create({
-      incident_id: incident.id,
-      action_type: "incident_created",
-      actor: (await base44.auth.me()).email,
-      details: { severity: formData.severity, source: formData.source }
-    });
-    
-    // Trigger AI analysis
-    generateAIAnalysis(incident);
-    
-    navigate(createPageUrl(`IncidentDetail?id=${incident.id}`));
-  };
-  
-  const generateAIAnalysis = async (incident) => {
-    const prompt = `You are an expert Site Reliability Engineer analyzing an incident. 
-    
-Incident Details:
-- Title: ${incident.title}
-- Description: ${incident.description || "Not provided"}
-- Severity: ${incident.severity}
-- Source: ${incident.source || "Unknown"}
-- Affected Systems: ${incident.affected_systems?.join(", ") || "Not specified"}
-- Logs/Errors: ${incident.logs || "No logs provided"}
+  const [title, setTitle] = useState("");
+  const [severity, setSeverity] = useState("P2");
+  const [description, setDescription] = useState("");
+  const [logs, setLogs] = useState("");
+  const [status, setStatus] = useState("active");
+  const [aiResult, setAiResult] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
 
-Provide a comprehensive analysis in JSON format with:
-1. A concise executive summary (2-3 sentences)
-2. Top 3 most likely root causes with probability scores (0-1) and supporting evidence
-3. 3-5 recommended actions with priority (critical/high/medium/low), confidence scores (0-1), rationale, potential risks, and verification steps
-4. Estimated time to recovery
-5. Overall confidence score (0-1) based on data quality
-6. Data quality notes (what information is missing or unclear)
-7. Limitations of this analysis (what could be wrong)`;
+  async function create() {
+    setErr("");
+    setSaving(true);
+    try {
+      const incident = await api.entities.Incident.create({
+        title,
+        severity,
+        description: description || null,
+        logs: logs || null,
+        status,
+      });
 
-    const analysis = await base44.integrations.Core.InvokeLLM({
-      prompt,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          summary: { type: "string" },
-          root_causes: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                cause: { type: "string" },
-                probability: { type: "number" },
-                evidence: { type: "array", items: { type: "string" } }
-              }
-            }
-          },
-          recommendations: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                action: { type: "string" },
-                priority: { type: "string" },
-                confidence: { type: "number" },
-                rationale: { type: "string" },
-                risks: { type: "string" },
-                verification_steps: { type: "array", items: { type: "string" } }
-              }
-            }
-          },
-          estimated_recovery_time: { type: "string" },
-          confidence_score: { type: "number" },
-          data_quality_notes: { type: "string" },
-          limitations: { type: "array", items: { type: "string" } }
-        }
-      }
-    });
-    
-    await base44.entities.Incident.update(incident.id, {
-      ai_analysis: analysis,
-      status: "awaiting_approval"
-    });
-    
-    await base44.entities.AuditLog.create({
-      incident_id: incident.id,
-      action_type: "ai_analysis_generated",
-      actor: "SYSTEM",
-      details: { confidence_score: analysis.confidence_score }
-    });
-    
-    // Trigger AI automation
-    await base44.functions.invoke('automateIncidentResponse', { incident_id: incident.id });
-  };
-  
+      // Audit log (optional)
+      await api.entities.AuditLog.create({
+        incident_id: incident.id,
+        action_type: "CREATE_INCIDENT",
+        actor: "user@demo.local",
+        details: { title, severity },
+      });
+
+      setTitle("");
+      setDescription("");
+      setLogs("");
+      setAiResult(null);
+      return incident;
+    } catch (e) {
+      setErr(e.message || String(e));
+      throw e;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runAI() {
+    setErr("");
+    try {
+      const system =
+        "You are an incident commander copilot. Analyze the incident and return concise guidance as plain text with: Summary, Suspected Cause, Immediate Actions, Comms Guidance, Owners.";
+
+      const prompt = JSON.stringify({ title, severity, status, description, logs }, null, 2);
+      const out = await api.ai.invokeLLM({ prompt, system });
+      setAiResult(out?.text || "");
+    } catch (e) {
+      setErr(e.message || String(e));
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link to={createPageUrl("Dashboard")}>
-          <Button variant="ghost" className="mb-6 -ml-2 text-slate-600">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
-          </Button>
-        </Link>
-        
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
-          <div className="p-6 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-rose-50 flex items-center justify-center">
-                <AlertTriangle className="h-5 w-5 text-rose-600" />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-slate-900">Report New Incident</h1>
-                <p className="text-sm text-slate-500">AI will analyze and provide recommendations</p>
-              </div>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Create Incident</h1>
+        <p className="text-muted-foreground">Create and analyze incidents for command decisions.</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Incident Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Title</div>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., DCPP apps failing to load" />
+          </div>
+
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="text-sm font-medium mr-2">Severity</div>
+            {["P1", "P2", "P3"].map((p) => (
+              <Button key={p} variant={severity === p ? "default" : "outline"} onClick={() => setSeverity(p)} type="button">
+                {p}
+              </Button>
+            ))}
+            <div className="ml-auto flex items-center gap-2">
+              <Badge variant="outline">{status}</Badge>
+              <Button variant={status === "active" ? "default" : "outline"} onClick={() => setStatus("active")} type="button">
+                active
+              </Button>
+              <Button variant={status === "resolved" ? "default" : "outline"} onClick={() => setStatus("resolved")} type="button">
+                resolved
+              </Button>
             </div>
           </div>
-          
-          <div className="p-6">
-            <CreateIncidentForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Description</div>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What’s happening? Impact? Scope?" />
           </div>
-        </div>
-      </div>
+
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Logs / Signals</div>
+            <Textarea value={logs} onChange={(e) => setLogs(e.target.value)} placeholder="Paste key alerts, traces, symptoms..." />
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={create} disabled={saving || !title}>
+              {saving ? "Saving..." : "Create Incident"}
+            </Button>
+            <Button variant="secondary" onClick={runAI} disabled={!title}>
+              Analyze with AI
+            </Button>
+          </div>
+
+          {err ? <p className="text-sm text-destructive">{err}</p> : null}
+
+          {aiResult ? (
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>AI Guidance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="whitespace-pre-wrap text-sm">{aiResult}</pre>
+              </CardContent>
+            </Card>
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }
